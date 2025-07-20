@@ -40,11 +40,11 @@ const Login = () => {
   };
 
   const demoCredentials = [
-    { role: 'Admin', username: 'admin' },
-    { role: 'Supervisor (HR)', username: 'supervisor1' },
-    { role: 'Supervisor (IT)', username: 'supervisor2' },
-    { role: 'Operator (HR)', username: 'operator1' },
-    { role: 'Operator (IT)', username: 'operator2' }
+    { role: 'Admin', username: 'admin', password: 'admin123' },
+    { role: 'Supervisor (HR)', username: 'supervisor1', password: 'super123' },
+    { role: 'Supervisor (IT)', username: 'supervisor2', password: 'super123' },
+    { role: 'Operator (HR)', username: 'operator1', password: 'oper123' },
+    { role: 'Operator (IT)', username: 'operator2', password: 'oper123' }
   ];
 
   const fillDemo = (username, password) => {

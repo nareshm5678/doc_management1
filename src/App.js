@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Auth/Login';
 import Dashboard from './components/Dashboard/Dashboard';
 import FormBuilder from './components/Forms/FormBuilder';
+import OperatorForm from './components/Forms/OperatorForm';
 import FormReview from './components/Forms/FormReview';
 import MyForms from './components/Forms/MyForms';
 import FormEdit from './components/Forms/FormEdit';
@@ -48,6 +49,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['operator']}>
                     <FormBuilder />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="forms/operator-log" 
+                element={
+                  <ProtectedRoute allowedRoles={['operator']}>
+                    <OperatorForm />
                   </ProtectedRoute>
                 } 
               />

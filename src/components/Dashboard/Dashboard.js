@@ -83,6 +83,14 @@ const Dashboard = () => {
       roles: ['operator']
     },
     {
+      title: 'Operator Production Log',
+      description: 'Fill out daily production log form',
+      icon: FileText,
+      action: '/forms/operator-log',
+      color: '#007bff',
+      roles: ['operator']
+    },
+    {
       title: 'Review Forms',
       description: 'Review submitted forms',
       icon: Eye,
@@ -105,11 +113,24 @@ const Dashboard = () => {
     );
   }
 
+  // Check if user is an operator
+  const isOperator = user?.role === 'operator';
+
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h2>Dashboard</h2>
-        <p>Welcome back, {user?.username}!</p>
+        <div className="header-content">
+          <div>
+            <h1>Welcome, {user?.name || 'User'}</h1>
+            <p>Here's what's happening with your forms</p>
+          </div>
+          {isOperator && (
+            <Link to="/forms/new" className="btn primary">
+              <Plus size={16} style={{ marginRight: '8px' }} />
+              New Operator Form
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Stats Cards */}

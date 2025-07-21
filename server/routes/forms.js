@@ -108,7 +108,20 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create new form
 router.post('/', authenticateToken, authorize('operator'), upload.array('attachments', 5), async (req, res) => {
   try {
-    const formData = JSON.parse(req.body.formData);
+    console.log('Form submission received:', {
+      body: req.body,
+      files: req.files?.length || 0,
+      user: req.user?.username || 'unknown'
+    });
+    
+    // Parse form data
+    let formData;
+    try {
+      formData = JSON.parse(req.body.formData);
+    } catch (parseError) {
+      console.error('Error parsing formData:', parseError);
+      return res.status(400).json({ message: 'Invalid form data format', error: parseError.message });
+    }
     
     const attachments = req.files?.map(file => ({
       filename: file.filename,
@@ -118,24 +131,57 @@ router.post('/', authenticateToken, authorize('operator'), upload.array('attachm
       size: file.size
     })) || [];
     
-    const form = new Form({
-      title: req.body.title,
-      description: req.body.description,
-      department: req.user.department,
-      template: req.body.template,
+    // Determine if this is an OperatorForm submission or FormBuilder submission
+    const isOperatorForm = formData.productMachineInfo || formData.operationalParams || formData.signOff;
+    
+    // Create form with proper data mapping based on form type
+    const formConfig = {
+      title: req.body.title || formData.title || 'Form Submission',
+      description: req.body.description || formData.description || '',
+      department: req.user?.department || 'manufacturing',
+      template: req.body.template || (isOperatorForm ? 'operator_daily_log' : 'general_form'),
+      status: 'submitted',
       formData,
       attachments,
       submittedBy: req.user._id
-    });
+    };
     
-    form.addAuditLog('created', req.user._id, 'Form created');
+    // Add structured data only for OperatorForm submissions
+    if (isOperatorForm) {
+      formConfig.productMachineInfo = formData.productMachineInfo || {
+        machineId: 'N/A',
+        productName: 'N/A',
+        batchNumber: 'N/A'
+      };
+      formConfig.operationalParams = formData.operationalParams || {};
+      formConfig.inspection = formData.inspection || {};
+      formConfig.location = formData.location || { type: 'Point', coordinates: [0, 0] };
+      formConfig.signOff = formData.signOff || {
+        operatorSignature: 'Digital Signature',
+        operatorName: req.user?.username || 'Unknown',
+        submissionDate: new Date(),
+        ipAddress: req.ip || '',
+        userAgent: req.get('User-Agent') || ''
+      };
+    }
+    
+    const form = new Form(formConfig);
+    
+    form.addAuditLog('created', req.user._id, 'Form created and submitted');
     
     await form.save();
     await form.populate('submittedBy', 'username');
     
-    res.status(201).json(form);
+    console.log('Form saved successfully:', form._id);
+    res.status(201).json({ message: 'Form submitted successfully', form });
+    
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Form submission error:', error);
+    res.status(500).json({ 
+      message: 'Server error during form submission', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

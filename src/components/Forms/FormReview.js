@@ -11,7 +11,11 @@ import {
   Calendar,
   User,
   Download,
-  Send
+  Send,
+  Paperclip,
+  Image,
+  File,
+  Archive
 } from 'lucide-react';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -74,6 +78,8 @@ const FormReview = () => {
   const handleFormSelect = async (form) => {
     try {
       const response = await axios.get(`/forms/${form._id}`);
+      console.log('Selected form data:', response.data);
+      console.log('Attachments in selected form:', response.data.attachments);
       setSelectedForm(response.data);
       setComment('');
       setReviewAction('');
@@ -123,21 +129,132 @@ const FormReview = () => {
   };
 
   const renderFormData = (formData, template) => {
-    if (!template || !template.fields) return null;
+    if (!formData) {
+      return <div className="no-data">No form data available</div>;
+    }
 
-    return template.fields.map((field) => {
-      const value = formData[field.id];
-      if (!value && value !== 0) return null;
-
+    // Handle operator form data structure
+    if (formData.productMachineInfo || formData.operationalParams || formData.inspection) {
       return (
-        <div key={field.id} className="form-data-item">
-          <label>{field.label}:</label>
-          <div className="form-data-value">
-            {Array.isArray(value) ? value.join(', ') : value.toString()}
-          </div>
+        <div className="operator-form-data">
+          {/* Product & Machine Info */}
+          {formData.productMachineInfo && (
+            <div className="form-section">
+              <h5>Product & Machine Information</h5>
+              <div className="form-data-grid">
+                {Object.entries(formData.productMachineInfo).map(([key, value]) => {
+                  if (!value && value !== 0) return null;
+                  
+                  // Handle complex objects
+                  const displayValue = typeof value === 'object' && value !== null
+                    ? JSON.stringify(value, null, 2)
+                    : Array.isArray(value)
+                    ? value.join(', ')
+                    : value.toString();
+                  
+                  return (
+                    <div key={key} className="form-data-item">
+                      <label>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</label>
+                      <div className="form-data-value">{displayValue}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Operational Parameters */}
+          {formData.operationalParams && (
+            <div className="form-section">
+              <h5>Operational Parameters</h5>
+              <div className="form-data-grid">
+                {Object.entries(formData.operationalParams).map(([key, value]) => {
+                  if (!value && value !== 0) return null;
+                  
+                  // Handle complex objects
+                  const displayValue = typeof value === 'object' && value !== null
+                    ? JSON.stringify(value, null, 2)
+                    : Array.isArray(value)
+                    ? value.join(', ')
+                    : value.toString();
+                  
+                  return (
+                    <div key={key} className="form-data-item">
+                      <label>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</label>
+                      <div className="form-data-value">{displayValue}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Inspection & Quality */}
+          {formData.inspection && (
+            <div className="form-section">
+              <h5>Inspection & Quality</h5>
+              <div className="form-data-grid">
+                {Object.entries(formData.inspection).map(([key, value]) => {
+                  if (!value && value !== 0) return null;
+                  
+                  // Handle complex objects
+                  const displayValue = typeof value === 'object' && value !== null
+                    ? JSON.stringify(value, null, 2)
+                    : Array.isArray(value)
+                    ? value.join(', ')
+                    : value.toString();
+                  
+                  return (
+                    <div key={key} className="form-data-item">
+                      <label>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</label>
+                      <div className="form-data-value">
+                        {displayValue}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       );
-    });
+    }
+
+    // Handle template-based form data
+    if (template && template.fields) {
+      return template.fields.map((field) => {
+        const value = formData[field.id];
+        if (!value && value !== 0) return null;
+
+        return (
+          <div key={field.id} className="form-data-item">
+            <label>{field.label}:</label>
+            <div className="form-data-value">
+              {Array.isArray(value) ? value.join(', ') : value.toString()}
+            </div>
+          </div>
+        );
+      });
+    }
+
+    // Fallback: display all form data as key-value pairs
+    return (
+      <div className="generic-form-data">
+        {Object.entries(formData).map(([key, value]) => {
+          if (!value && value !== 0) return null;
+          if (typeof value === 'object') return null; // Skip complex objects
+          
+          return (
+            <div key={key} className="form-data-item">
+              <label>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</label>
+              <div className="form-data-value">
+                {Array.isArray(value) ? value.join(', ') : value.toString()}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   if (loading) {
@@ -252,26 +369,163 @@ const FormReview = () => {
 
                 {/* Form Data */}
                 <div className="detail-section">
-                  <h4>Form Data</h4>
+                  <h4>
+                    <FileText size={20} />
+                    Form Data
+                  </h4>
                   <div className="form-data">
                     {renderFormData(selectedForm.formData, selectedForm.template)}
                   </div>
                 </div>
 
                 {/* Attachments */}
-                {selectedForm.attachments && selectedForm.attachments.length > 0 && (
+                {selectedForm.attachments && selectedForm.attachments.length > 0 ? (
                   <div className="detail-section">
-                    <h4>Attachments</h4>
+                    <h4>
+                      <Paperclip size={20} />
+                      Attachments ({selectedForm.attachments.length})
+                    </h4>
                     <div className="attachments">
-                      {selectedForm.attachments.map((attachment, index) => (
-                        <div key={index} className="attachment-item">
-                          <FileText size={16} />
-                          <span>{attachment.originalName}</span>
-                          <button className="download-btn">
-                            <Download size={14} />
-                          </button>
+                      {selectedForm.attachments.map((attachment, index) => {
+                        // Enhanced file type icon function
+                        const getFileIcon = (fileType, filename) => {
+                          const ext = filename?.split('.').pop()?.toLowerCase();
+                          if (fileType === 'pdf' || ext === 'pdf') {
+                            return <FileText size={20} style={{color: '#dc2626'}} />;
+                          } else if (['doc', 'docx', 'txt', 'rtf'].includes(ext) || fileType === 'document') {
+                            return <File size={20} style={{color: '#2563eb'}} />;
+                          } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp'].includes(ext) || fileType === 'image') {
+                            return <Image size={20} style={{color: '#059669'}} />;
+                          } else if (['xls', 'xlsx', 'csv'].includes(ext) || fileType === 'spreadsheet') {
+                            return <FileText size={20} style={{color: '#059669'}} />;
+                          } else if (['ppt', 'pptx'].includes(ext)) {
+                            return <FileText size={20} style={{color: '#ea580c'}} />;
+                          } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+                            return <Archive size={20} style={{color: '#7c2d12'}} />;
+                          }
+                          return <FileText size={20} style={{color: '#6b7280'}} />;
+                        };
+
+                        const formatFileSize = (bytes) => {
+                          if (!bytes) return 'Unknown size';
+                          const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                          if (bytes === 0) return '0 Bytes';
+                          const i = Math.floor(Math.log(bytes) / Math.log(1024));
+                          return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+                        };
+
+                        return (
+                          <div key={index} className="attachment-item">
+                            <div className="attachment-icon">
+                              {getFileIcon(attachment.fileType, attachment.originalName || attachment.filename)}
+                            </div>
+                            <div className="attachment-info">
+                              <div className="attachment-name">
+                                {attachment.originalName || attachment.filename || 'Unknown file'}
+                              </div>
+                              {attachment.description && (
+                                <div className="attachment-description">
+                                  {attachment.description}
+                                </div>
+                              )}
+                              <div className="attachment-meta">
+                                <span className="attachment-size">
+                                  {formatFileSize(attachment.size)}
+                                </span>
+                                {attachment.fileType && (
+                                  <span className="attachment-type">
+                                    {attachment.fileType.toUpperCase()}
+                                  </span>
+                                )}
+                                {attachment.uploadedBy && (
+                                  <span className="attachment-uploader">
+                                    Uploaded by {attachment.uploadedBy}
+                                  </span>
+                                )}
+                                {attachment.uploadDate && (
+                                  <span className="attachment-date">
+                                    {format(new Date(attachment.uploadDate), 'MMM dd, yyyy')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="attachment-actions">
+                              <button 
+                                className="download-btn"
+                                onClick={() => {
+                                  const filename = attachment.filename || attachment.originalName;
+                                  window.open(`/api/forms/${selectedForm._id}/attachments/${filename}`, '_blank');
+                                }}
+                                title="Download file"
+                              >
+                                <Download size={16} />
+                              </button>
+                              <button 
+                                className="view-btn"
+                                onClick={() => {
+                                  const filename = attachment.filename || attachment.originalName;
+                                  window.open(`/api/forms/${selectedForm._id}/attachments/${filename}/view`, '_blank');
+                                }}
+                                title="View file"
+                              >
+                                <Eye size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="detail-section">
+                    <h4>
+                      <Paperclip size={20} />
+                      Attachments
+                    </h4>
+                    <div className="no-data">
+                      No attachments were uploaded with this form.
+                    </div>
+                  </div>
+                )}
+
+                {/* Operator Signature */}
+                {selectedForm.signOff && selectedForm.signOff.operatorSignature && (
+                  <div className="detail-section">
+                    <h4>
+                      <User size={20} />
+                      Operator Signature
+                    </h4>
+                    <div className="signature-section">
+                      <div className="signature-details">
+                        <div className="detail-grid">
+                          <div className="detail-item">
+                            <label>Signed By:</label>
+                            <span>{selectedForm.signOff.operatorName}</span>
+                          </div>
+                          <div className="detail-item">
+                            <label>Signed On:</label>
+                            <span>{format(new Date(selectedForm.signOff.submissionDate), 'MMM dd, yyyy HH:mm')}</span>
+                          </div>
                         </div>
-                      ))}
+                      </div>
+                      <div className="signature-display">
+                        <label>Digital Signature:</label>
+                        <div className="signature-container">
+                          <img 
+                            src={selectedForm.signOff.operatorSignature} 
+                            alt="Operator Signature" 
+                            className="signature-image"
+                            style={{
+                              maxWidth: '300px',
+                              maxHeight: '150px',
+                              border: '1px solid #ddd',
+                              borderRadius: '4px',
+                              padding: '8px',
+                              background: '#fff'
+                            }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -279,7 +533,10 @@ const FormReview = () => {
                 {/* Comments */}
                 {selectedForm.comments && selectedForm.comments.length > 0 && (
                   <div className="detail-section">
-                    <h4>Comments</h4>
+                    <h4>
+                      <MessageCircle size={20} />
+                      Comments ({selectedForm.comments.length})
+                    </h4>
                     <div className="comments-list">
                       {selectedForm.comments.map((comment, index) => (
                         <div key={index} className="comment-item">
@@ -298,7 +555,10 @@ const FormReview = () => {
 
                 {/* Review Actions */}
                 <div className="detail-section">
-                  <h4>Review Action</h4>
+                  <h4>
+                    <CheckCircle size={20} />
+                    Review Action
+                  </h4>
                   <div className="review-actions">
                     <div className="action-buttons">
                       {user.role === 'supervisor' ? (

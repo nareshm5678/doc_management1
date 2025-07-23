@@ -44,8 +44,37 @@ const FileAttachments = () => {
   const { control, watch, setValue } = useFormContext();
   const [uploadProgress, setUploadProgress] = useState({});
   const [uploadErrors, setUploadErrors] = useState({});
+
+  // Ensure attachments is always an array
+  const attachments = watch('attachments');
+  React.useEffect(() => {
+    if (!Array.isArray(attachments)) {
+      setValue('attachments', []);
+    }
+  }, []);
+  const safeAttachments = Array.isArray(attachments) ? attachments : [];
+
+  // Debug: Log attachments state
+  React.useEffect(() => {
+    console.log('Attachments state changed:', safeAttachments);
+  }, [safeAttachments]);
   
-  const attachments = watch('attachments') || [];
+  // Helper function to check if all uploads are complete
+  const areAllUploadsComplete = () => {
+    if (!Array.isArray(safeAttachments)) return true;
+    return safeAttachments.every(file => file.status === 'uploaded');
+  };
+  
+  // Helper function to get upload summary
+  const getUploadSummary = () => {
+    if (!Array.isArray(safeAttachments)) {
+      return { uploading: 0, uploaded: 0, total: 0 };
+    }
+    const uploading = safeAttachments.filter(file => file.status === 'uploading').length;
+    const uploaded = safeAttachments.filter(file => file.status === 'uploaded').length;
+    const total = safeAttachments.length;
+    return { uploading, uploaded, total };
+  };
 
   const getFileIcon = (fileType) => {
     switch (fileType) {
@@ -68,13 +97,53 @@ const FileAttachments = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // Helper function to determine file type
+  const determineFileType = (file) => {
+    const fileName = file.name.toLowerCase();
+    const mimeType = file.type.toLowerCase();
+    
+    // Check for images
+    if (mimeType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(fileName)) {
+      return 'image';
+    }
+    
+    // Check for PDFs
+    if (mimeType === 'application/pdf' || fileName.endsWith('.pdf')) {
+      return 'pdf';
+    }
+    
+    // Check for documents
+    if (mimeType.includes('document') || 
+        mimeType.includes('word') || 
+        mimeType.includes('text') ||
+        /\.(doc|docx|txt|rtf|odt)$/.test(fileName)) {
+      return 'document';
+    }
+    
+    // Check for spreadsheets
+    if (mimeType.includes('spreadsheet') || 
+        mimeType.includes('excel') ||
+        /\.(xls|xlsx|csv|ods)$/.test(fileName)) {
+      return 'document';
+    }
+    
+    // Check for presentations
+    if (mimeType.includes('presentation') || 
+        mimeType.includes('powerpoint') ||
+        /\.(ppt|pptx|odp)$/.test(fileName)) {
+      return 'document';
+    }
+    
+    return 'other';
+  };
+
   const onDrop = useCallback((acceptedFiles) => {
     const newAttachments = acceptedFiles.map(file => ({
       file,
       name: file.name,
       size: file.size,
       type: file.type,
-      fileType: 'other',
+      fileType: determineFileType(file),
       description: '',
       uploadedBy: 'currentUser', // This would be replaced with actual user info
       uploadDate: new Date().toISOString(),
@@ -83,13 +152,15 @@ const FileAttachments = () => {
     }));
 
     // Add new files to the form
-    setValue('attachments', [...(attachments || []), ...newAttachments]);
+    const currentAttachments = Array.isArray(attachments) ? attachments : [];
+    const updatedAttachments = [...currentAttachments, ...newAttachments];
+    setValue('attachments', updatedAttachments);
     
     // Simulate upload progress
     newAttachments.forEach(attachment => {
       let progress = 0;
       const interval = setInterval(() => {
-        progress += Math.random() * 10;
+        progress += Math.random() * 20; // Faster upload simulation
         if (progress >= 100) {
           clearInterval(interval);
           setUploadProgress(prev => ({
@@ -99,21 +170,29 @@ const FileAttachments = () => {
           
           // Update status after upload completes
           setTimeout(() => {
-            setValue('attachments', 
-              (attachments || []).map(a => 
+            setValue('attachments', prevAttachments => {
+              const updatedAttachments = prevAttachments.map(a => 
                 a.id === attachment.id 
                   ? { ...a, status: 'uploaded' } 
                   : a
-              )
-            );
+              );
+              console.log('Updated attachments:', updatedAttachments);
+              return updatedAttachments;
+            });
+            // Clear progress after successful upload
+            setUploadProgress(prev => {
+              const newProgress = { ...prev };
+              delete newProgress[attachment.id];
+              return newProgress;
+            });
           }, 300);
         } else {
           setUploadProgress(prev => ({
             ...prev,
-            [attachment.id]: progress
+            [attachment.id]: Math.min(progress, 100)
           }));
         }
-      }, 100);
+      }, 80); // Slightly faster interval
     });
   }, [attachments, setValue]);
 
@@ -133,13 +212,14 @@ const FileAttachments = () => {
   });
 
   const removeFile = (index) => {
-    const updated = [...attachments];
+    const updated = [...safeAttachments];
     updated.splice(index, 1);
     setValue('attachments', updated);
   };
 
   const updateFileMetadata = (index, field, value) => {
-    const updated = [...attachments];
+    if (!Array.isArray(safeAttachments)) return;
+    const updated = [...safeAttachments];
     updated[index] = { ...updated[index], [field]: value };
     setValue('attachments', updated);
   };
@@ -179,12 +259,102 @@ const FileAttachments = () => {
     );
   };
 
+  // Export upload status to parent form for validation
+  React.useEffect(() => {
+    // Add a custom property to the form data to track upload status
+    setValue('_uploadStatus', {
+      allUploadsComplete: areAllUploadsComplete(),
+      summary: getUploadSummary()
+    });
+  }, [attachments, setValue]);
+
   return (
     <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
       <Typography variant="h6" gutterBottom>
         <AttachFileIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
         File Attachments
       </Typography>
+      
+      {/* Upload Status Summary */}
+      {Array.isArray(safeAttachments) && safeAttachments.length > 0 && (
+        <Box sx={{ mb: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+          <Typography variant="body2" color="textSecondary">
+            {(() => {
+              const { uploading, uploaded, total } = getUploadSummary();
+              if (uploading > 0) {
+                return `Uploading ${uploading} of ${total} files... Please wait for all uploads to complete before submitting.`;
+              } else if (uploaded === total && total > 0) {
+                return `All ${total} files uploaded successfully. You can now proceed to submit the form.`;
+              } else {
+                return `${uploaded} of ${total} files uploaded.`;
+              }
+            })()} 
+          </Typography>
+          {!areAllUploadsComplete() && (
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+              <CircularProgress size={16} sx={{ mr: 1 }} />
+              <Typography variant="caption" color="warning.main">
+                Form submission will be disabled until all files are uploaded
+              </Typography>
+            </Box>
+          )}
+          {/* Show uploaded files summary */}
+          {(() => {
+            const uploadedFiles = safeAttachments.filter(file => file.status === 'uploaded');
+            if (uploadedFiles.length > 0) {
+              return (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="success.main" sx={{ fontWeight: 'bold' }}>
+                    Successfully Uploaded Files:
+                  </Typography>
+                  <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {uploadedFiles.map((file, index) => (
+                      <Box 
+                        key={index} 
+                        sx={{ 
+                          bgcolor: 'success.light', 
+                          color: 'success.contrastText', 
+                          px: 1.5, 
+                          py: 0.8, 
+                          borderRadius: 1,
+                          fontSize: '0.85rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                          border: '1px solid',
+                          borderColor: 'success.main'
+                        }}
+                      >
+                        <CheckCircleIcon fontSize="small" />
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'success.contrastText' }}>
+                            {file.name}
+                          </Typography>
+                          {file.description && (
+                            <Typography variant="caption" sx={{ opacity: 0.8, color: 'success.contrastText' }}>
+                              {file.description}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              );
+            }
+            return null;
+          })()} 
+        </Box>
+      )}
+      
+      {safeAttachments.length === 0 && (
+        <Box mt={2} mb={2} textAlign="center">
+          <Typography variant="body2" color="text.secondary">
+            No attachments added yet.
+          </Typography>
+        </Box>
+      )}
+      
       <Divider sx={{ mb: 3 }} />
 
       {/* Dropzone */}
@@ -208,29 +378,34 @@ const FileAttachments = () => {
           sx={{ fontSize: 48, mb: 1 }} 
         />
         <Typography variant="h6">
-          {isDragActive ? 'Drop files here' : 'Drag & drop files here'}
+          {isDragActive ? 'Drop files here to upload' : 'Drag & drop files here to upload'}
         </Typography>
         <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 2 }}>
-          or click to browse files (max 10MB per file)
+          or click to browse and select files (maximum 10MB per file)
         </Typography>
         <Button variant="contained" color="primary">
           Select Files
         </Button>
         <Typography variant="caption" display="block" sx={{ mt: 2 }}>
-          Supported formats: JPG, PNG, GIF, PDF, DOC, DOCX, XLS, XLSX, TXT
+          Supported file formats: Images (JPG, PNG, GIF), Documents (PDF, DOC, DOCX), Spreadsheets (XLS, XLSX), Text (TXT)
         </Typography>
       </Box>
 
       {/* File List */}
-      {attachments.length > 0 && (
-        <Box>
-          <Typography variant="subtitle1" gutterBottom>
-            Attached Files ({attachments.length})
+      {Array.isArray(safeAttachments) && safeAttachments.length > 0 && (
+        <Box sx={{ mt: 3 }}>
+          <Divider sx={{ mb: 2 }} />
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AttachFileIcon color="primary" />
+            Uploaded Files ({safeAttachments.length})
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Click on a file to view details. You can edit descriptions or remove files using the actions below.
           </Typography>
           
           <List>
-            {attachments.map((file, index) => (
-              <React.Fragment key={file.id || index}>
+            {safeAttachments.map((file, index) => (
+              <React.Fragment key={file.id || file.name + index}>
                 <ListItem
                   sx={{
                     border: '1px solid',
@@ -273,8 +448,9 @@ const FileAttachments = () => {
                         {file.status === 'uploading' && (
                           <Chip
                             icon={<CircularProgress size={14} />}
-                            label="Uploading..."
+                            label={`Uploading... ${Math.round(uploadProgress[file.id] || 0)}%`}
                             size="small"
+                            color="info"
                             sx={{ ml: 1, fontSize: '0.7rem' }}
                           />
                         )}
@@ -282,7 +458,7 @@ const FileAttachments = () => {
                         {file.status === 'uploaded' && (
                           <Chip
                             icon={<CheckCircleIcon fontSize="small" />}
-                            label="Uploaded"
+                            label="Successfully Uploaded"
                             color="success"
                             size="small"
                             sx={{ ml: 1, fontSize: '0.7rem' }}
@@ -329,26 +505,48 @@ const FileAttachments = () => {
                         <TextField
                           size="small"
                           label="Description"
-                          placeholder="Add a description"
+                          placeholder="Add a description for this file (optional)"
                           value={file.description || ''}
                           onChange={(e) => updateFileMetadata(index, 'description', e.target.value)}
                           sx={{ flexGrow: 1 }}
+                          helperText="Describe the purpose or content of this file"
+                          multiline
+                          rows={2}
+                          inputProps={{ maxLength: 500 }}
                         />
                       </Box>
                     </Box>
                     
-                    <Box sx={{ ml: 2 }}>
-                      <IconButton 
-                        size="small" 
-                        color="error"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFile(index);
-                        }}
-                        disabled={file.status === 'uploading'}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
+                    <Box sx={{ ml: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Tooltip title="Remove this file">
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Are you sure you want to remove "${file.name}"?`)) {
+                              removeFile(index);
+                            }
+                          }}
+                          disabled={file.status === 'uploading'}
+                          sx={{
+                            '&:hover': {
+                              backgroundColor: 'error.light',
+                              color: 'error.contrastText'
+                            }
+                          }}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                      
+                      {file.status === 'uploaded' && (
+                        <Tooltip title="File successfully uploaded">
+                          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                            <CheckCircleIcon color="success" fontSize="small" />
+                          </Box>
+                        </Tooltip>
+                      )}
                     </Box>
                   </Box>
                 </ListItem>

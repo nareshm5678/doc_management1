@@ -42,6 +42,7 @@ const SignatureSection = () => {
   const currentSignerTitle = watch('signature.signerTitle');
   const currentLocation = watch('signature.location');
   const currentTimestamp = watch('signature.timestamp');
+  const certifyChecked = watch('signature.certified') || false;
   
   // Initialize form values
   useEffect(() => {
@@ -409,6 +410,8 @@ const SignatureSection = () => {
                 <Checkbox
                   id="certifyCheckbox"
                   size="small"
+                  checked={certifyChecked}
+                  onChange={(e) => setValue('signature.certified', e.target.checked)}
                   disabled={!isSigning && !!signatureData}
                 />
                 <Typography variant="body2" component="label" htmlFor="certifyCheckbox">

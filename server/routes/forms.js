@@ -27,14 +27,35 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    // Expanded file type support
+    const allowedExtensions = /jpeg|jpg|png|gif|pdf|doc|docx|txt|rtf|odt|xls|xlsx|csv|ppt|pptx|zip|rar/;
+    const allowedMimeTypes = [
+      // Images
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+      // Documents
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain', 'text/rtf',
+      'application/vnd.oasis.opendocument.text',
+      // Spreadsheets
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv',
+      // Presentations
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      // Archives
+      'application/zip', 'application/x-rar-compressed'
+    ];
+    
+    const extname = allowedExtensions.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedMimeTypes.includes(file.mimetype);
     
     if (mimetype && extname) {
       return cb(null, true);
     } else {
-      cb(new Error('Invalid file type'));
+      cb(new Error(`Invalid file type: ${file.mimetype}. Allowed types: PDF, DOC, DOCX, TXT, Images, etc.`));
     }
   }
 });
@@ -99,6 +120,14 @@ router.get('/', authenticateToken, async (req, res) => {
       .populate('approvedBy', 'username')
       .sort({ createdAt: -1 });
     
+    console.log(`Retrieved ${forms.length} forms for user role: ${req.user.role}`);
+    forms.forEach(form => {
+      if (form.attachments && form.attachments.length > 0) {
+        console.log(`Form ${form._id} has ${form.attachments.length} attachments:`, 
+          form.attachments.map(att => ({ name: att.originalName, type: att.fileType, desc: att.description })));
+      }
+    });
+    
     res.json(forms);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -123,13 +152,81 @@ router.post('/', authenticateToken, authorize('operator'), upload.array('attachm
       return res.status(400).json({ message: 'Invalid form data format', error: parseError.message });
     }
     
-    const attachments = req.files?.map(file => ({
-      filename: file.filename,
-      originalName: file.originalname,
-      path: file.path,
-      mimetype: file.mimetype,
-      size: file.size
-    })) || [];
+    // Helper function to determine file type on server
+    const determineFileType = (file) => {
+      const fileName = file.originalname.toLowerCase();
+      const mimeType = file.mimetype.toLowerCase();
+      
+      // Check for images
+      if (mimeType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(fileName)) {
+        return 'image';
+      }
+      
+      // Check for PDFs
+      if (mimeType === 'application/pdf' || fileName.endsWith('.pdf')) {
+        return 'pdf';
+      }
+      
+      // Check for documents
+      if (mimeType.includes('document') || 
+          mimeType.includes('word') || 
+          mimeType.includes('text') ||
+          /\.(doc|docx|txt|rtf|odt)$/.test(fileName)) {
+        return 'document';
+      }
+      
+      // Check for spreadsheets
+      if (mimeType.includes('spreadsheet') || 
+          mimeType.includes('excel') ||
+          /\.(xls|xlsx|csv|ods)$/.test(fileName)) {
+        return 'document';
+      }
+      
+      // Check for presentations
+      if (mimeType.includes('presentation') || 
+          mimeType.includes('powerpoint') ||
+          /\.(ppt|pptx|odp)$/.test(fileName)) {
+        return 'document';
+      }
+      
+      return 'other';
+    };
+
+    // Parse attachment metadata if provided
+    let attachmentMetadata = [];
+    if (req.body.attachmentMetadata) {
+      try {
+        attachmentMetadata = JSON.parse(req.body.attachmentMetadata);
+      } catch (parseError) {
+        console.warn('Error parsing attachment metadata:', parseError);
+      }
+    }
+    
+    // Map files with their metadata
+    const attachments = req.files?.map((file, index) => {
+      const metadata = attachmentMetadata[index] || {};
+      const serverFileType = determineFileType(file);
+      return {
+        filename: file.filename,
+        originalName: file.originalname,
+        path: file.path,
+        mimetype: file.mimetype,
+        size: file.size,
+        // Use server-side file type detection as fallback
+        fileType: metadata.fileType || serverFileType,
+        description: metadata.description || '',
+        uploadedBy: metadata.uploadedBy || req.user?.username || 'unknown',
+        uploadDate: metadata.uploadDate || new Date().toISOString(),
+        status: metadata.status || 'uploaded'
+      };
+    }) || [];
+    
+    console.log('Processed attachments:', attachments.map(att => ({
+      name: att.originalName,
+      type: att.fileType,
+      size: att.size,
+      description: att.description
+    })));
     
     // Determine if this is an OperatorForm submission or FormBuilder submission
     const isOperatorForm = formData.productMachineInfo || formData.operationalParams || formData.signOff;
@@ -173,6 +270,17 @@ router.post('/', authenticateToken, authorize('operator'), upload.array('attachm
     await form.populate('submittedBy', 'username');
     
     console.log('Form saved successfully:', form._id);
+    console.log('Attachments stored in database:', form.attachments.length);
+    form.attachments.forEach((att, index) => {
+      console.log(`Attachment ${index + 1}:`, {
+        filename: att.filename,
+        originalName: att.originalName,
+        fileType: att.fileType,
+        description: att.description,
+        size: att.size
+      });
+    });
+    
     res.status(201).json({ message: 'Form submitted successfully', form });
     
   } catch (error) {
@@ -419,6 +527,120 @@ router.get('/:id', authenticateToken, async (req, res) => {
     
     res.json(form);
   } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Download/serve attachment files
+router.get('/:id/attachments/:filename', authenticateToken, async (req, res) => {
+  try {
+    const { id, filename } = req.params;
+    
+    // Find the form and verify user has access
+    const form = await Form.findById(id);
+    
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found' });
+    }
+    
+    // Check permissions
+    let hasAccess = false;
+    
+    switch (req.user.role) {
+      case 'operator':
+        hasAccess = form.submittedBy.toString() === req.user._id.toString();
+        break;
+      case 'supervisor':
+        hasAccess = form.department === req.user.department;
+        break;
+      case 'admin':
+        hasAccess = true;
+        break;
+    }
+    
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    // Find the attachment
+    const attachment = form.attachments.find(att => att.filename === filename);
+    
+    if (!attachment) {
+      return res.status(404).json({ message: 'Attachment not found' });
+    }
+    
+    // Check if file exists on disk
+    if (!fs.existsSync(attachment.path)) {
+      return res.status(404).json({ message: 'File not found on server' });
+    }
+    
+    // Set appropriate headers
+    res.setHeader('Content-Type', attachment.mimetype);
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
+    
+    // Stream the file
+    const fileStream = fs.createReadStream(attachment.path);
+    fileStream.pipe(res);
+    
+  } catch (error) {
+    console.error('File download error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Serve attachment files for viewing (inline)
+router.get('/:id/attachments/:filename/view', authenticateToken, async (req, res) => {
+  try {
+    const { id, filename } = req.params;
+    
+    // Find the form and verify user has access
+    const form = await Form.findById(id);
+    
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found' });
+    }
+    
+    // Check permissions
+    let hasAccess = false;
+    
+    switch (req.user.role) {
+      case 'operator':
+        hasAccess = form.submittedBy.toString() === req.user._id.toString();
+        break;
+      case 'supervisor':
+        hasAccess = form.department === req.user.department;
+        break;
+      case 'admin':
+        hasAccess = true;
+        break;
+    }
+    
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    // Find the attachment
+    const attachment = form.attachments.find(att => att.filename === filename);
+    
+    if (!attachment) {
+      return res.status(404).json({ message: 'Attachment not found' });
+    }
+    
+    // Check if file exists on disk
+    if (!fs.existsSync(attachment.path)) {
+      return res.status(404).json({ message: 'File not found on server' });
+    }
+    
+    // Set appropriate headers for inline viewing
+    res.setHeader('Content-Type', attachment.mimetype);
+    res.setHeader('Content-Disposition', `inline; filename="${attachment.originalName}"`);
+    
+    // Stream the file
+    const fileStream = fs.createReadStream(attachment.path);
+    fileStream.pipe(res);
+    
+  } catch (error) {
+    console.error('File view error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

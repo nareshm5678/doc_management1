@@ -172,24 +172,52 @@ const FormView = () => {
           <div className="attachments-view">
             <h3>Attachments</h3>
             <div className="attachments-list">
-              {form.attachments.map((attachment, index) => (
-                <div key={index} className="attachment-item">
-                  <FileText size={20} />
-                  <div className="attachment-info">
-                    <div className="attachment-name">{attachment.originalName}</div>
-                    <div className="attachment-meta">
-                      {(attachment.size / 1024 / 1024).toFixed(2)} MB
+              {form.attachments.map((attachment, index) => {
+                const getFileIcon = (fileType) => {
+                  switch (fileType) {
+                    case 'image':
+                      return <FileText size={20} style={{ color: '#4caf50' }} />;
+                    case 'pdf':
+                      return <FileText size={20} style={{ color: '#f44336' }} />;
+                    case 'document':
+                      return <FileText size={20} style={{ color: '#2196f3' }} />;
+                    default:
+                      return <FileText size={20} />;
+                  }
+                };
+                
+                return (
+                  <div key={index} className="attachment-item">
+                    {getFileIcon(attachment.fileType)}
+                    <div className="attachment-info">
+                      <div className="attachment-name">{attachment.originalName}</div>
+                      <div className="attachment-meta">
+                        <span className="file-type">{attachment.fileType?.toUpperCase() || 'FILE'}</span>
+                        <span className="file-size">{(attachment.size / 1024 / 1024).toFixed(2)} MB</span>
+                        {attachment.description && (
+                          <span className="file-description">{attachment.description}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="attachment-actions">
+                      <button 
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => window.open(`/api/forms/${form._id}/attachments/${attachment.filename}`, '_blank')}
+                      >
+                        <Download size={16} />
+                        Download
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => window.open(`/api/forms/${form._id}/attachments/${attachment.filename}/view`, '_blank')}
+                      >
+                        <FileText size={16} />
+                        View
+                      </button>
                     </div>
                   </div>
-                  <button 
-                    className="btn btn-sm btn-secondary"
-                    onClick={() => window.open(`/uploads/${attachment.filename}`, '_blank')}
-                  >
-                    <Download size={16} />
-                    Download
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

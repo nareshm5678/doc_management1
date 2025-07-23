@@ -55,7 +55,7 @@ const defaultValues = {
     batchNumber: '',
     lotNumber: '',
     productionDate: format(new Date(), 'yyyy-MM-dd'),
-    operatorId: 'current_user_id', // This would be set from auth context
+    operatorId: null, // Will be set from auth context, null for now
     operatorName: 'Current User'   // This would be set from auth context
   },
   operationalParams: {
@@ -95,7 +95,8 @@ const defaultValues = {
     location: '',
     ipAddress: '',
     userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : '',
-    isVerified: false
+    isVerified: false,
+    certified: false
   },
   metadata: {
     createdAt: new Date().toISOString(),
@@ -201,8 +202,21 @@ const OperatorForm = () => {
         }
         break;
         
-      case 3: // Attachments (optional)
-        isValid = true; // Attachments are optional
+      case 3: // Attachments
+        // Check if there are any files being uploaded
+        const uploadStatus = formValues._uploadStatus || {};
+        const attachments = formValues.attachments || [];
+        
+        if (attachments.length > 0) {
+          // If there are attachments, all must be uploaded
+          if (!uploadStatus.allUploadsComplete) {
+            errorMessage = 'Please wait for all file uploads to complete before proceeding';
+            isValid = false;
+          }
+        } else {
+          // Attachments are optional, so no files is valid
+          isValid = true;
+        }
         break;
         
       case 4: // Sign-off
@@ -213,6 +227,9 @@ const OperatorForm = () => {
           isValid = false;
         } else if (!signature.signerName || signature.signerName.trim() === '') {
           errorMessage = 'Please enter your name';
+          isValid = false;
+        } else if (!signature.certified) {
+          errorMessage = 'Please check the certification checkbox to confirm the information is accurate';
           isValid = false;
         }
         break;
@@ -299,7 +316,7 @@ const OperatorForm = () => {
           deviceInfo: navigator.userAgent,
           submittedAt: new Date().toISOString(),
           formVersion: '1.0.0',
-          submittedBy: latestFormData.productMachineInfo?.operatorId || 'unknown',
+          submittedBy: latestFormData.productMachineInfo?.operatorId || null,
           submittedByName: latestFormData.productMachineInfo?.operatorName || 'Unknown User'
         },
         isComplete: true
@@ -310,8 +327,10 @@ const OperatorForm = () => {
       // Add form data as JSON string
       formPayload.append('formData', JSON.stringify(formDataObj));
       
-      // Process file attachments
-      if (latestFormData.attachments && latestFormData.attachments.length > 0) {
+      // Process file attachments with metadata
+      if (latestFormData.attachments && Array.isArray(latestFormData.attachments) && latestFormData.attachments.length > 0) {
+        const attachmentMetadata = [];
+        
         latestFormData.attachments.forEach((attachment, index) => {
           // Handle different file object structures
           let fileToUpload = null;
@@ -325,12 +344,31 @@ const OperatorForm = () => {
           }
           
           if (fileToUpload) {
+            // Append the actual file
             formPayload.append('attachments', fileToUpload);
-            console.log('Appending file:', fileToUpload.name, 'Size:', fileToUpload.size);
+            
+            // Collect metadata for this file
+            const fileMetadata = {
+              originalName: fileToUpload.name,
+              size: fileToUpload.size,
+              type: fileToUpload.type,
+              fileType: attachment.fileType || 'other',
+              description: attachment.description || '',
+              uploadedBy: attachment.uploadedBy || 'current_user',
+              uploadDate: attachment.uploadDate || new Date().toISOString(),
+              status: attachment.status || 'uploaded'
+            };
+            
+            attachmentMetadata.push(fileMetadata);
+            console.log('Appending file:', fileToUpload.name, 'Size:', fileToUpload.size, 'Metadata:', fileMetadata);
           } else {
             console.warn('Could not process attachment:', attachment);
           }
         });
+        
+        // Add attachment metadata as JSON string
+        formPayload.append('attachmentMetadata', JSON.stringify(attachmentMetadata));
+        console.log('Attachment metadata:', attachmentMetadata);
       }
       
       // Log the form data being sent (for debugging)

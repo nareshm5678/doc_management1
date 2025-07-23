@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { FileText, User, Lock, LogIn } from 'lucide-react';
+import { FileText, User, Lock, LogIn, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import './Login.css';
 
 const Login = () => {
@@ -12,6 +12,8 @@ const Login = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
 
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
@@ -56,9 +58,13 @@ const Login = () => {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <FileText className="login-icon" size={48} />
-          <h1>Document Management System</h1>
-          <p>Digital Documentation & Record Management</p>
+          <div className="brand-container">
+            <FileText className="login-icon" size={52} />
+            <div className="brand-text">
+              <h1>Document Management</h1>
+              <p>Digital Documentation & Record Management</p>
+            </div>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
@@ -81,45 +87,94 @@ const Login = () => {
             <div className="input-container">
               <Lock className="input-icon" size={20} />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 name="password"
                 placeholder="Password"
                 value={formData.password}
                 onChange={handleInputChange}
                 required
                 disabled={loading}
+                aria-label="Password"
               />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                disabled={loading}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </div>
 
-          {error && <div className="error-message">{error}</div>}
+          {error && (
+            <div className="error-message" role="alert">
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
 
           <button
             type="submit"
-            className="login-button"
-            disabled={loading}
+            className={`login-button ${loading ? 'loading' : ''}`}
+            disabled={loading || !formData.username || !formData.password}
+            aria-label="Sign in to your account"
           >
-            <LogIn size={20} />
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? (
+              <>
+                <div className="spinner"></div>
+                <span>Signing in...</span>
+              </>
+            ) : (
+              <>
+                <LogIn size={20} />
+                <span>Sign In</span>
+              </>
+            )}
           </button>
         </form>
 
         <div className="demo-section">
-          <h3>Demo Credentials</h3>
-          <div className="demo-credentials">
-            {demoCredentials.map((cred, index) => (
-              <div key={index} className="demo-item">
-                <span className="demo-role">{cred.role}:</span>
+          <button
+            type="button"
+            className="demo-toggle"
+            onClick={() => setShowDemo(!showDemo)}
+            disabled={loading}
+            aria-expanded={showDemo}
+            aria-controls="demo-credentials"
+          >
+            <span>Try Demo Accounts</span>
+            <span className={`demo-arrow ${showDemo ? 'expanded' : ''}`}>▼</span>
+          </button>
+          
+          <div 
+            id="demo-credentials" 
+            className={`demo-credentials ${showDemo ? 'show' : ''}`}
+            aria-hidden={!showDemo}
+          >
+            <p className="demo-description">
+              Click any account below to auto-fill login credentials:
+            </p>
+            <div className="demo-grid">
+              {demoCredentials.map((cred, index) => (
                 <button
+                  key={index}
                   type="button"
-                  className="demo-button"
+                  className="demo-card"
                   onClick={() => fillDemo(cred.username, cred.password)}
                   disabled={loading}
+                  aria-label={`Use ${cred.role} demo account`}
                 >
-                  {cred.username} / {cred.password}
+                  <div className="demo-role">{cred.role}</div>
+                  <div className="demo-credentials-text">
+                    <span className="demo-username">{cred.username}</span>
+                    <span className="demo-separator">•</span>
+                    <span className="demo-password">{cred.password}</span>
+                  </div>
                 </button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>

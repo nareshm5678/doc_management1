@@ -89,10 +89,12 @@ const formSchema = new mongoose.Schema({
     path: { type: String, required: true },
     mimetype: { type: String, required: true },
     size: { type: Number, required: true },
-    fileType: { type: String, enum: ['image', 'document', 'other'], default: 'document' },
+    fileType: { type: String, enum: ['image', 'pdf', 'document', 'other'], default: 'other' },
     description: String,
-    uploadedAt: { type: Date, default: Date.now },
-    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    uploadedBy: String, // Store username or user identifier
+    uploadDate: { type: Date, default: Date.now },
+    status: { type: String, enum: ['uploading', 'uploaded', 'failed'], default: 'uploaded' },
+    uploadedAt: { type: Date, default: Date.now } // Keep for backward compatibility
   }],
   
   // Geo-location

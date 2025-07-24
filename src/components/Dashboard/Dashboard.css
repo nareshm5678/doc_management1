@@ -134,6 +134,10 @@
   background: linear-gradient(135deg, #dc3545, #c82333);
 }
 
+.stat-icon.disapproved {
+  background: linear-gradient(135deg, #fd7e14, #e8590c);
+}
+
 .stat-content h3 {
   margin: 0 0 5px 0;
   font-size: 32px;
@@ -319,6 +323,10 @@
   color: #dc3545;
 }
 
+.status-icon.disapproved {
+  color: #fd7e14;
+}
+
 .form-status {
   font-size: 12px;
   font-weight: 700;
@@ -358,6 +366,7 @@
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

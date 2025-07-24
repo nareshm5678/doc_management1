@@ -285,9 +285,6 @@ const OperatorForm = () => {
       const formPayload = new FormData();
       
       // Add basic form data
-      formPayload.append('title', latestFormData.title || 'Daily Production Log');
-      formPayload.append('description', latestFormData.description || '');
-      formPayload.append('template', 'operator_daily_log');
       formPayload.append('status', 'submitted');
       formPayload.append('department', 'manufacturing');
       
@@ -322,10 +319,30 @@ const OperatorForm = () => {
         isComplete: true
       };
       
+      // Validate required fields
+      const requiredFields = {
+        'productMachineInfo.machineId': formDataObj.productMachineInfo?.machineId,
+        'productMachineInfo.productName': formDataObj.productMachineInfo?.productName,
+        'productMachineInfo.batchNumber': formDataObj.productMachineInfo?.batchNumber
+      };
+      
+      const missingFields = Object.entries(requiredFields)
+        .filter(([key, value]) => !value || value.trim() === '')
+        .map(([key]) => key);
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+      
       console.log('Submitting form data:', formDataObj);
       
       // Add form data as JSON string
       formPayload.append('formData', JSON.stringify(formDataObj));
+      
+      // Add required fields for form creation
+      formPayload.append('title', `Production Log - ${formDataObj.productMachineInfo?.productName || 'Unknown Product'} - ${new Date().toLocaleDateString()}`);
+      formPayload.append('description', `Production log for batch ${formDataObj.productMachineInfo?.batchNumber || 'Unknown'} on machine ${formDataObj.productMachineInfo?.machineId || 'Unknown'}`);
+      formPayload.append('template', 'operator_daily_log');
       
       // Process file attachments with metadata
       if (latestFormData.attachments && Array.isArray(latestFormData.attachments) && latestFormData.attachments.length > 0) {
@@ -408,7 +425,14 @@ const OperatorForm = () => {
       
       if (!response.ok) {
         console.error('Server error response:', responseData);
-        throw new Error(responseData.message || `Server responded with ${response.status}: ${response.statusText}`);
+        
+        // Handle validation errors
+        if (responseData.validationErrors) {
+          const errorMessages = responseData.validationErrors.map(err => `${err.field}: ${err.message}`).join('\n');
+          throw new Error(`Validation failed:\n${errorMessages}`);
+        }
+        
+        throw new Error(responseData.error || responseData.message || `Server responded with ${response.status}: ${response.statusText}`);
       }
       
       // Show success message

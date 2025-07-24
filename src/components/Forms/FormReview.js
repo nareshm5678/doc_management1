@@ -15,7 +15,8 @@ import {
   Paperclip,
   Image,
   File,
-  Archive
+  Archive,
+  Ban
 } from 'lucide-react';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -560,41 +561,124 @@ const FormReview = () => {
                     Review Action
                   </h4>
                   <div className="review-actions">
-                    <div className="action-buttons">
-                      {user.role === 'supervisor' ? (
-                        <>
-                          <button
-                            className={`action-btn approve ${reviewAction === 'approve' ? 'selected' : ''}`}
-                            onClick={() => setReviewAction('approve')}
-                          >
-                            <CheckCircle size={16} />
-                            Approve
-                          </button>
-                          <button
-                            className={`action-btn escalate ${reviewAction === 'escalate' ? 'selected' : ''}`}
-                            onClick={() => setReviewAction('escalate')}
-                          >
-                            <Send size={16} />
-                            Escalate to Admin
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            className={`action-btn approve ${reviewAction === 'approve' ? 'selected' : ''}`}
-                            onClick={() => setReviewAction('approve')}
-                          >
-                            <CheckCircle size={16} />
-                            Approve
-                          </button>
-                          <button
-                            className={`action-btn reject ${reviewAction === 'reject' ? 'selected' : ''}`}
-                            onClick={() => setReviewAction('reject')}
-                          >
-                            <XCircle size={16} />
-                            Reject
-                          </button>
-                        </>
+                    <div className="action-buttons-container">
+                      <div className={`action-buttons-grid ${user.role === 'supervisor' ? 'supervisor-grid' : 'admin-grid'}`}>
+                        {user.role === 'supervisor' ? (
+                          <>
+                            <button
+                              className={`action-btn action-btn-approve ${reviewAction === 'approve' ? 'selected' : ''}`}
+                              onClick={() => setReviewAction('approve')}
+                              title="Approve this form and mark it as completed"
+                            >
+                              <div className="btn-icon">
+                                <CheckCircle size={16} />
+                              </div>
+                              <div className="btn-content">
+                                <span className="btn-title">Approve</span>
+                                <span className="btn-subtitle">Mark as approved</span>
+                              </div>
+                            </button>
+                            <button
+                              className={`action-btn action-btn-disapprove ${reviewAction === 'disapprove' ? 'selected' : ''}`}
+                              onClick={() => setReviewAction('disapprove')}
+                              title="Disapprove this form and send back to operator"
+                            >
+                              <div className="btn-icon">
+                                <XCircle size={16} />
+                              </div>
+                              <div className="btn-content">
+                                <span className="btn-title">Disapprove</span>
+                                <span className="btn-subtitle">Send back to operator</span>
+                              </div>
+                            </button>
+                            <button
+                              className={`action-btn action-btn-escalate ${reviewAction === 'escalate' ? 'selected' : ''}`}
+                              onClick={() => setReviewAction('escalate')}
+                              title="Send this form to admin for further review"
+                            >
+                              <div className="btn-icon">
+                                <Send size={16} />
+                              </div>
+                              <div className="btn-content">
+                                <span className="btn-title">Escalate</span>
+                                <span className="btn-subtitle">Send to admin</span>
+                              </div>
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              className={`action-btn action-btn-approve ${reviewAction === 'approve' ? 'selected' : ''}`}
+                              onClick={() => setReviewAction('approve')}
+                              title="Approve this form and mark it as completed"
+                            >
+                              <div className="btn-icon">
+                                <CheckCircle size={18} />
+                              </div>
+                              <div className="btn-content">
+                                <span className="btn-title">Approve</span>
+                                <span className="btn-subtitle">Final approval</span>
+                              </div>
+                            </button>
+                            <button
+                              className={`action-btn action-btn-disapprove ${reviewAction === 'disapprove' ? 'selected' : ''}`}
+                              onClick={() => setReviewAction('disapprove')}
+                              title="Disapprove this form and send back to operator"
+                            >
+                              <div className="btn-icon">
+                                <XCircle size={18} />
+                              </div>
+                              <div className="btn-content">
+                                <span className="btn-title">Disapprove</span>
+                                <span className="btn-subtitle">Send back to operator</span>
+                              </div>
+                            </button>
+                            <button
+                              className={`action-btn action-btn-reject ${reviewAction === 'reject' ? 'selected' : ''}`}
+                              onClick={() => setReviewAction('reject')}
+                              title="Reject this form permanently"
+                            >
+                              <div className="btn-icon">
+                                <Ban size={18} />
+                              </div>
+                              <div className="btn-content">
+                                <span className="btn-title">Reject</span>
+                                <span className="btn-subtitle">Permanent rejection</span>
+                              </div>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      
+                      {reviewAction && (
+                        <div className="selected-action-info">
+                          <div className="info-badge">
+                            {reviewAction === 'approve' && (
+                              <>
+                                <CheckCircle size={16} className="text-success" />
+                                <span>Form will be approved</span>
+                              </>
+                            )}
+                            {reviewAction === 'disapprove' && (
+                              <>
+                                <XCircle size={16} className="text-warning" />
+                                <span>{user.role === 'admin' ? 'Form will be disapproved and sent back to operator' : 'Form will be disapproved and sent back'}</span>
+                              </>
+                            )}
+                            {reviewAction === 'escalate' && (
+                              <>
+                                <Send size={16} className="text-warning" />
+                                <span>Form will be escalated to admin</span>
+                              </>
+                            )}
+                            {reviewAction === 'reject' && (
+                              <>
+                                <Ban size={16} className="text-danger" />
+                                <span>Form will be permanently rejected</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
 
@@ -609,14 +693,42 @@ const FormReview = () => {
                       />
                     </div>
 
-                    <button
-                      className="submit-review-btn"
-                      onClick={handleReview}
-                      disabled={!reviewAction || submitting}
-                    >
-                      <MessageCircle size={16} />
-                      {submitting ? 'Processing...' : 'Submit Review'}
-                    </button>
+                    <div className="submit-section">
+                      <button
+                        className={`submit-review-btn ${reviewAction ? `submit-${reviewAction}` : ''}`}
+                        onClick={handleReview}
+                        disabled={!reviewAction || submitting}
+                      >
+                        <div className="submit-btn-content">
+                          {submitting ? (
+                            <>
+                              <div className="spinner"></div>
+                              <span>Processing...</span>
+                            </>
+                          ) : (
+                            <>
+                              {reviewAction === 'approve' && <CheckCircle size={18} />}
+                              {reviewAction === 'disapprove' && <XCircle size={18} />}
+                              {reviewAction === 'escalate' && <Send size={18} />}
+                              {reviewAction === 'reject' && <Ban size={18} />}
+                              <span>
+                                {reviewAction === 'approve' && 'Submit Approval'}
+                                {reviewAction === 'disapprove' && (user.role === 'admin' ? 'Disapprove & Send to Operator' : 'Submit Disapproval')}
+                                {reviewAction === 'escalate' && 'Escalate to Admin'}
+                                {reviewAction === 'reject' && 'Permanently Reject'}
+                                {!reviewAction && 'Select Action First'}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </button>
+                      
+                      {!reviewAction && (
+                        <p className="submit-help-text">
+                          Please select an action above before submitting your review.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

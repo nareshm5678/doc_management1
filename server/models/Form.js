@@ -112,7 +112,7 @@ const formSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'submitted', 'reviewed', 'approved', 'rejected'],
+    enum: ['draft', 'submitted', 'reviewed', 'approved', 'rejected', 'disapproved'],
     default: 'draft'
   },
   submittedBy: {

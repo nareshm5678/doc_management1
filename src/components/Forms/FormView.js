@@ -202,14 +202,52 @@ const FormView = () => {
                     <div className="attachment-actions">
                       <button 
                         className="btn btn-sm btn-secondary"
-                        onClick={() => window.open(`/api/forms/${form._id}/attachments/${attachment.filename}`, '_blank')}
+                        onClick={() => {
+                          const token = localStorage.getItem('token');
+                          const url = `/api/forms/${form._id}/attachments/${attachment.filename}`;
+                          fetch(url, {
+                            headers: {
+                              'Authorization': `Bearer ${token}`
+                            }
+                          })
+                          .then(response => {
+                            if (!response.ok) throw new Error('Download failed');
+                            return response.blob();
+                          })
+                          .then(blob => {
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = attachment.originalName;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                          })
+                          .catch(error => {
+                            console.error('Download error:', error);
+                            alert(`Failed to download ${attachment.originalName}. Please try again or contact support.`);
+                          });
+                        }}
                       >
                         <Download size={16} />
                         Download
                       </button>
                       <button 
                         className="btn btn-sm btn-outline-secondary"
-                        onClick={() => window.open(`/api/forms/${form._id}/attachments/${attachment.filename}/view`, '_blank')}
+                        onClick={() => {
+                          try {
+                            const token = localStorage.getItem('token');
+                            const url = `/api/forms/${form._id}/attachments/${attachment.filename}/view`;
+                            const newWindow = window.open(`${url}?token=${token}`, '_blank');
+                            if (!newWindow) {
+                              alert('Please allow popups to view files');
+                            }
+                          } catch (error) {
+                            console.error('View error:', error);
+                            alert(`Failed to open ${attachment.originalName}. Please try again.`);
+                          }
+                        }}
                       >
                         <FileText size={16} />
                         View

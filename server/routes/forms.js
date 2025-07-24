@@ -110,7 +110,13 @@ router.get('/', authenticateToken, async (req, res) => {
         };
         break;
       case 'admin':
-        // Admin can see all forms
+        // Admin can only see forms that have been escalated (reviewed status)
+        filter = {
+          $or: [
+            { status: 'reviewed' },
+            { approvedBy: req.user._id }
+          ]
+        };
         break;
     }
     
@@ -285,6 +291,29 @@ router.post('/', authenticateToken, authorize('operator'), upload.array('attachm
     
   } catch (error) {
     console.error('Form submission error:', error);
+    
+    // Check if it's a validation error
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.keys(error.errors).map(key => ({
+        field: key,
+        message: error.errors[key].message
+      }));
+      
+      return res.status(400).json({ 
+        message: 'Form validation failed', 
+        validationErrors,
+        error: error.message
+      });
+    }
+    
+    // Check if it's a duplicate key error
+    if (error.code === 11000) {
+      return res.status(400).json({ 
+        message: 'Duplicate entry error', 
+        error: 'A form with similar data already exists'
+      });
+    }
+    
     res.status(500).json({ 
       message: 'Server error during form submission', 
       error: error.message,
@@ -429,7 +458,7 @@ router.patch('/:id/submit', authenticateToken, authorize('operator'), async (req
 // Review form (Supervisor)
 router.patch('/:id/review', authenticateToken, authorize('supervisor'), async (req, res) => {
   try {
-    const { action, comment } = req.body; // action: 'approve' or 'escalate'
+    const { action, comment } = req.body; // action: 'approve', 'disapprove', or 'escalate'
     
     const form = await Form.findOne({ 
       _id: req.params.id, 
@@ -454,6 +483,9 @@ router.patch('/:id/review', authenticateToken, authorize('supervisor'), async (r
       form.status = 'approved';
       form.approvedBy = req.user._id;
       form.addAuditLog('approved', req.user._id, 'Form approved by supervisor');
+    } else if (action === 'disapprove') {
+      form.status = 'disapproved';
+      form.addAuditLog('disapproved', req.user._id, 'Form disapproved by supervisor - sent back to operator');
     } else if (action === 'escalate') {
       form.status = 'reviewed';
       form.addAuditLog('escalated', req.user._id, 'Form escalated to admin');
@@ -470,7 +502,7 @@ router.patch('/:id/review', authenticateToken, authorize('supervisor'), async (r
 // Final approval (Admin)
 router.patch('/:id/approve', authenticateToken, authorize('admin'), async (req, res) => {
   try {
-    const { action, comment } = req.body; // action: 'approve' or 'reject'
+    const { action, comment } = req.body; // action: 'approve', 'reject', or 'disapprove'
     
     const form = await Form.findOne({ _id: req.params.id, status: 'reviewed' });
     
@@ -489,6 +521,9 @@ router.patch('/:id/approve', authenticateToken, authorize('admin'), async (req, 
       form.status = 'approved';
       form.approvedBy = req.user._id;
       form.addAuditLog('approved', req.user._id, 'Form approved by admin');
+    } else if (action === 'disapprove') {
+      form.status = 'disapproved';
+      form.addAuditLog('disapproved', req.user._id, 'Form disapproved by admin - sent back to operator');
     } else if (action === 'reject') {
       form.status = 'rejected';
       form.addAuditLog('rejected', req.user._id, 'Form rejected by admin');
@@ -525,6 +560,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     
+    if (req.user.role === 'admin' && form.status !== 'reviewed' && form.approvedBy?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    
     res.json(form);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -554,7 +593,7 @@ router.get('/:id/attachments/:filename', authenticateToken, async (req, res) => 
         hasAccess = form.department === req.user.department;
         break;
       case 'admin':
-        hasAccess = true;
+        hasAccess = form.status === 'reviewed' || form.approvedBy?.toString() === req.user._id.toString() || form.status === 'approved';
         break;
     }
     
@@ -589,7 +628,13 @@ router.get('/:id/attachments/:filename', authenticateToken, async (req, res) => 
 });
 
 // Serve attachment files for viewing (inline)
-router.get('/:id/attachments/:filename/view', authenticateToken, async (req, res) => {
+router.get('/:id/attachments/:filename/view', (req, res, next) => {
+  // Handle token from query parameter for file viewing
+  if (req.query.token && !req.headers.authorization) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  authenticateToken(req, res, next);
+}, async (req, res) => {
   try {
     const { id, filename } = req.params;
     
@@ -611,7 +656,7 @@ router.get('/:id/attachments/:filename/view', authenticateToken, async (req, res
         hasAccess = form.department === req.user.department;
         break;
       case 'admin':
-        hasAccess = true;
+        hasAccess = form.status === 'reviewed' || form.approvedBy?.toString() === req.user._id.toString() || form.status === 'approved';
         break;
     }
     

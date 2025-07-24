@@ -53,6 +53,8 @@ const Dashboard = () => {
         return <CheckCircle className="status-icon approved" size={16} />;
       case 'rejected':
         return <XCircle className="status-icon rejected" size={16} />;
+      case 'disapproved':
+        return <XCircle className="status-icon disapproved" size={16} />;
       default:
         return <FileText className="status-icon" size={16} />;
     }
@@ -65,6 +67,7 @@ const Dashboard = () => {
       case 'reviewed': return '#17a2b8';
       case 'approved': return '#28a745';
       case 'rejected': return '#dc3545';
+      case 'disapproved': return '#fd7e14';
       default: return '#6c757d';
     }
   };
@@ -166,12 +169,12 @@ const Dashboard = () => {
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon rejected">
+          <div className="stat-icon disapproved">
             <XCircle size={24} />
           </div>
           <div className="stat-content">
-            <h3>{getFormsByStatus('rejected')}</h3>
-            <p>Rejected Forms</p>
+            <h3>{getFormsByStatus('disapproved')}</h3>
+            <p>Disapproved Forms</p>
           </div>
         </div>
       </div>
